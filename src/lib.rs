@@ -27,7 +27,7 @@ use rustdoc_gen::CrateDataForRustdoc;
 
 pub use config::{FeatureFlag, GlobalConfig};
 pub use query::{
-    ActualSemverUpdate, LintLevel, OverrideMap, OverrideStack, QueryOverride, RequiredSemverUpdate,
+    ActualSemverUpdate, LintLevel, OverrideMap, OverrideStack, QueryOverride, RequiredUpdate,
     SemverQuery, Witness,
 };
 

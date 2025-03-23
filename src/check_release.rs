@@ -10,9 +10,8 @@ use rayon::prelude::*;
 use trustfall::{FieldValue, TransparentValue};
 
 use crate::data_generation::DataStorage;
-use crate::query::LintMode;
 use crate::{
-    query::{ActualSemverUpdate, LintLevel, OverrideStack, RequiredSemverUpdate, SemverQuery},
+    query::{ActualSemverUpdate, LintLevel, OverrideStack, RequiredUpdate, SemverQuery},
     CrateReport, GlobalConfig, ReleaseType, WitnessGeneration,
 };
 
@@ -216,9 +215,8 @@ pub(super) fn run_check_release(
 
     let (queries_to_run, queries_to_skip): (Vec<_>, _) =
         SemverQuery::all_queries().into_values().partition(|query| {
-            overrides.effective_lint_mode(query) == LintMode::AlwaysRun
-                || !version_change.supports_requirement(overrides.effective_required_update(query))
-                    && overrides.effective_lint_level(query) > LintLevel::Allow
+            !version_change.supports_requirement(overrides.effective_required_update(query))
+                && overrides.effective_lint_level(query) > LintLevel::Allow
         });
     let skipped_queries = queries_to_skip.len();
 
@@ -278,15 +276,13 @@ pub(super) fn run_check_release(
     let mut results_with_always_run_warnings = vec![];
 
     for (semver_query, time_to_decide, results) in all_results {
+        let required_update = overrides.effective_required_update(semver_query);
         config
             .log_verbose(|config| {
-                let category = match (
-                    overrides.effective_required_update(semver_query),
-                    overrides.effective_lint_mode(semver_query),
-                ) {
-                    (RequiredSemverUpdate::Major, LintMode::SemVer) => "major",
-                    (RequiredSemverUpdate::Minor, LintMode::SemVer) => "minor",
-                    (_, LintMode::AlwaysRun) => "always-run",
+                let category = match required_update {
+                    RequiredUpdate::Major => "major",
+                    RequiredUpdate::Minor => "minor",
+                    RequiredUpdate::None => "none",
                 };
 
                 let (status, status_color) = match (
@@ -319,21 +315,16 @@ pub(super) fn run_check_release(
 
         if !results.is_empty() {
             let lint_level = overrides.effective_lint_level(semver_query);
-            let lint_mode = overrides.effective_lint_mode(semver_query);
 
-            match (lint_level, lint_mode) {
-                (LintLevel::Deny, LintMode::SemVer) => {
-                    results_with_errors.push((semver_query, results))
-                }
-                (LintLevel::Warn, LintMode::SemVer) => {
-                    results_with_warnings.push((semver_query, results))
-                }
-                (LintLevel::Warn, LintMode::AlwaysRun) => {
+            match (lint_level, required_update) {
+                (LintLevel::Warn, RequiredUpdate::None) => {
                     results_with_always_run_warnings.push((semver_query, results))
                 }
-                (LintLevel::Deny, LintMode::AlwaysRun) => {
+                (LintLevel::Deny, RequiredUpdate::None) => {
                     results_with_always_run_errors.push((semver_query, results))
                 }
+                (LintLevel::Deny, _) => results_with_errors.push((semver_query, results)),
+                (LintLevel::Warn, _) => results_with_warnings.push((semver_query, results)),
                 (LintLevel::Allow, _) => unreachable!(
                     "`LintLevel::Allow` lint was unexpectedly not skipped: {semver_query:?}"
                 ),
@@ -453,11 +444,11 @@ pub(super) fn run_check_release(
                     required_bump.as_str(),
                     required_versions
                         .iter()
-                        .filter(|x| *x == &RequiredSemverUpdate::Major)
+                        .filter(|x| *x == &RequiredUpdate::Major)
                         .count(),
                     required_versions
                         .iter()
-                        .filter(|x| *x == &RequiredSemverUpdate::Minor)
+                        .filter(|x| *x == &RequiredUpdate::Minor)
                         .count(),
                 ),
                 Color::Ansi(AnsiColor::Red),
@@ -480,11 +471,11 @@ pub(super) fn run_check_release(
                     "produced {} major and {} minor level warnings",
                     suggested_versions
                         .iter()
-                        .filter(|x| *x == &RequiredSemverUpdate::Major)
+                        .filter(|x| *x == &RequiredUpdate::Major)
                         .count(),
                     suggested_versions
                         .iter()
-                        .filter(|x| *x == &RequiredSemverUpdate::Minor)
+                        .filter(|x| *x == &RequiredUpdate::Minor)
                         .count(),
                 ),
                 Color::Ansi(AnsiColor::Yellow),
@@ -526,7 +517,7 @@ pub(super) fn run_check_release(
         }
 
         Ok(CrateReport {
-            required_bump: required_bump.map(ReleaseType::from),
+            required_bump: required_bump.and_then(|required_bump| required_bump.into()),
             detected_bump: version_change,
             has_always_run_issues: total_always_run_issues > 0,
         })
