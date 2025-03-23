@@ -61,17 +61,6 @@ impl LintLevel {
     }
 }
 
-/// Whether to run this query in semver mode or always run mode.
-#[non_exhaustive]
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LintMode {
-    #[serde(alias = "always-run")]
-    AlwaysRun,
-    #[default]
-    #[serde(alias = "semver")]
-    SemVer,
-}
-
 /// Kind of semver update.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActualSemverUpdate {
@@ -118,10 +107,6 @@ pub struct SemverQuery {
 
     /// The default lint level for when this lint occurs.
     pub lint_level: LintLevel,
-
-    /// Whether to run this query in semver mode or always run mode.
-    #[serde(default)]
-    pub lint_mode: LintMode,
 
     #[serde(default)]
     pub reference: Option<String>,
@@ -882,7 +867,6 @@ mod tests {
             id,
             lint_level,
             required_update,
-            lint_mode: Default::default(),
             human_readable_name: String::new(),
             description: String::new(),
             reference: None,
