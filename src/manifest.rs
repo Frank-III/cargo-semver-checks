@@ -165,7 +165,7 @@ impl LintTable {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub(crate) enum OverrideConfig {
-    /// Specify both lint level and required update by name, with optional lint mode.
+    /// Specify both lint level and required update by name, e.g.
     /// `lint_name = { level = "deny", required-update = "major" }`
     #[serde(rename_all = "kebab-case")]
     Both {
